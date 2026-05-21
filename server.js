@@ -3,6 +3,7 @@ import cors from "cors";
 import { Mistral } from "@mistralai/mistralai";
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
@@ -29,7 +30,6 @@ function emptyAnalyse() {
   };
 }
 
-// Extraction JSON robuste
 function extractJson(text) {
   try {
     return JSON.parse(text);
@@ -45,7 +45,6 @@ function extractJson(text) {
   }
 }
 
-// Validation du format
 function isValidResponse(obj) {
   if (!obj || typeof obj !== "object") return false;
   if (!obj.analyse || typeof obj.analyse !== "object") return false;
@@ -64,10 +63,11 @@ function isValidResponse(obj) {
     "Général"
   ];
 
-  return expectedThemes.every(theme => typeof obj.analyse[theme] === "string");
+  return expectedThemes.every(
+    theme => typeof obj.analyse[theme] === "string"
+  );
 }
 
-// Petit retry automatique sur les 429
 async function callMistral(messages, retries = 2) {
   try {
     return await client.chat.complete({
@@ -77,10 +77,12 @@ async function callMistral(messages, retries = 2) {
     });
   } catch (err) {
     const msg = String(err?.message || "");
+
     if (retries > 0 && msg.includes("429")) {
       await new Promise(resolve => setTimeout(resolve, 1200));
       return callMistral(messages, retries - 1);
     }
+
     throw err;
   }
 }
@@ -96,14 +98,11 @@ app.post("/analyseIA", async (req, res) => {
       });
     }
 
-    const relanceHorsSujet =
-      "Pouvez-vous me dire ce que vous avez aimé dans cette pâtée pour chat ?";
-
-    // Si aucun texte exploitable n'est reçu, on relance
     if (!texte) {
       return res.json({
         analyse: emptyAnalyse(),
-        relance: relanceHorsSujet
+        relance:
+          "Pouvez-vous vous concentrer sur la pâtée pour chat et préciser ce qui vous a plu dans ce produit ?"
       });
     }
 
@@ -112,22 +111,24 @@ Tu es un interviewer senior expert en tests consommateurs, spécialisé dans les
 
 Tu analyses une réponse ouverte d’un consommateur à propos d’une pâtée pour chat.
 
-Le consommateur répond à une question sur ce qu’il a aimé dans ce produit.
+QUESTION POSÉE AU CONSOMMATEUR :
+Qu’avez-vous aimé dans cette pâtée pour chat ?
 
-Ton rôle :
-- vérifier si la réponse parle réellement du produit
-- identifier les thèmes mentionnés
-- évaluer si la réponse est suffisamment précise
-- sinon poser UNE seule relance utile
+OBJECTIF :
+- Vérifier si la réponse parle réellement de la pâtée pour chat.
+- Identifier les thèmes mentionnés.
+- Dire si chaque thème est détaillé ou pas.
+- Si nécessaire, poser UNE seule relance utile.
+- La relance doit porter sur TOUS les thèmes mentionnés mais pas assez détaillés.
 
-IMPORTANT :
-
-- Tu dois analyser la langue dans laquelle la rponse est formulée et formuler la relance dans la meme langue
-- Tu n’es pas un chatbot
-- Tu ne remercies pas
-- Tu ne résumes pas
-- Tu poses UNE seule relance si nécessaire
-- Si aucune relance n’est nécessaire, mets exactement : "Réponse suffisamment détaillée ✅"
+RÈGLE DE LANGUE OBLIGATOIRE :
+- Détecte la langue principale de la réponse consommateur.
+- La relance doit être rédigée STRICTEMENT dans la même langue.
+- Si la réponse est en espagnol, relance en espagnol.
+- Si la réponse est en français, relance en français.
+- Si la réponse est en anglais, relance en anglais.
+- Ne jamais répondre en français si la réponse consommateur est en espagnol.
+- Ne jamais ajouter de préfixe comme "Q2.bis", "Question complémentaire", "Relance" ou autre.
 
 RÉPONSE CONSOMMATEUR :
 "${texte}"
@@ -144,224 +145,247 @@ THÈMES À ANALYSER :
 - Santé
 - Général
 
-DÉFINITION DU THÈME "Général" :
-Utiliser "Général" si la réponse exprime une perception globale du produit
-ou un jugement général sur le produit sans correspondre directement aux autres thèmes.
+STATUTS POSSIBLES :
+- "Oui - Détaillé" : thème mentionné avec une information concrète, observable ou actionnable.
+- "Oui - Pas détaillé" : thème mentionné, mais formulation trop vague.
+- "Non" : thème non mentionné.
 
-Exemples :
-- produit unique
-- produit original
-- produit frais
-- produit classique
-- produit rassurant
-- donne confiance
-- bonne impression globale
+RÈGLE PRODUIT :
+La réponse doit parler de la pâtée pour chat, du produit, ou de l’expérience du chat avec cette pâtée.
 
-DÉFINITION DU THÈME "Apparence" :
-Utiliser "Apparence" si la réponse exprime une perception de l'apparence de la pâtée pour chat.
-Elle peut être considérée comme non satisfaisante si l'apparence n'est pas quantifiée ou détaillée,
-c'est-à-dire si la mention d'apparence ne s'accompagne pas de verbatim tels que :
+Si la réponse ne parle pas du produit, du chat, de la pâtée, de son goût, son odeur, sa texture, ses morceaux, son apparence, sa qualité, son packaging, sa santé ou une appréciation produit :
+- tous les thèmes = "Non"
+- relance dans la langue de la réponse
+- demander au répondant de se concentrer sur la pâtée pour chat et de préciser ce qui lui a plu dans le produit.
 
-- homogène
-- naturelle / pas artificielle
-- riche
-- pas sèche / pas trop humide
-- belle couleur
-- couleur appétissante
+Exemples hors sujet :
+- J’ai aimé le niveau d’ensoleillement.
+- La pièce était agréable.
+- Le questionnaire était simple.
+- Me gusta el sol.
+- La habitación era bonita.
 
-DÉFINITION DU THÈME "Odeur/Arome" :
-Utiliser "Odeur/Arome" si la réponse exprime une perception de l'odeur ou de l'arôme de la pâtée pour chat.
-Elle peut être considérée comme non satisfaisante si l'odeur/arôme n'est pas quantifié(e) ou détaillé(e),
-c'est-à-dire si la mention ne s'accompagne pas de verbatim tels que :
+RÈGLE ANTI-SURINTERPRÉTATION :
+Ne jamais associer un mot à un thème par approximation.
+- "ensoleillement" n’est pas une apparence du produit.
+- "ambiance" n’est pas une odeur du produit.
+- "moment agréable" n’est pas un goût du produit.
 
-- appétissante
-- naturelle / pas artificielle
-- riche
-- persistante
-- fraîche
-- ne restant pas sur les mains
-- trop forte
-- légère
+DÉFINITION DES THÈMES :
 
-DÉFINITION DU THÈME "Texture" :
-Utiliser "Texture" si la réponse exprime une perception de la texture de la pâtée pour chat.
-Elle peut être considérée comme non satisfaisante si la texture n'est pas quantifiée ou détaillée,
-c'est-à-dire si la mention de texture ne s'accompagne pas de verbatim tels que :
-
-- épaisse
-- onctueuse
-- ferme
-- lisse
-- moelleuse
-- trop sèche
-- assez humide
-
-DÉFINITION DU THÈME "Morceaux" :
-Utiliser "Morceaux" si la réponse exprime une perception des morceaux de la pâtée pour chat.
-Elle peut être considérée comme non satisfaisante si la quantité ou la nature des morceaux n'est pas quantifiée ou détaillée,
-c'est-à-dire si la mention de morceaux ne s'accompagne pas de verbatim tels que :
-
-- trop gros
-- trop petits
-- fibreux
-- naturels / pas artificiels
-- humides
-- tendres
-- moelleux
-- réguliers
-- homogènes
-- fermes
-- divers
-- bonne forme
-- bonne taille
-
-DÉFINITION DU THÈME "Packaging" :
-Utiliser "Packaging" si la réponse exprime une perception de l’emballage du produit.
-Elle peut être considérée comme non satisfaisante si la mention d'emballage / paquet / packaging
-ne s'accompagne pas de verbatim tels que :
-
-- classique
+Packaging :
+Mention de l’emballage, du paquet, du format, de l’ouverture, de la fermeture, du rangement, des informations sur le pack.
+Pas détaillé :
+- j’aime le packaging
+- le paquet est bien
+Détaillé :
+- facile à ouvrir
 - pratique
-- adapté
-- facile à ouvrir / fermer
-- facilite le service
-- contient la bonne quantité
-- bien renseigné
-- bonnes informations
+- bonne quantité
 - facile à lire
 - facile à ranger
-- matériau de qualité
+- bien renseigné
 
-DÉFINITION DU THÈME "Goût" :
-Utiliser "Goût" si la réponse exprime une perception du goût ou de la saveur du produit.
-Elle peut être considérée comme non satisfaisante si le goût reste évoqué de manière trop vague.
+Apparence :
+Mention de l’aspect visuel de la pâtée.
+Pas détaillé :
+- belle apparence
+- joli aspect
+- appétissant
+Détaillé :
+- belle couleur
+- couleur naturelle
+- homogène
+- riche
+- pas sèche
+- pas trop humide
+- aspect naturel
 
-Exemples détaillés :
-- savoureux
-- appétent
-- riche en goût
+Odeur/Arome :
+Mention de l’odeur ou de l’arôme.
+Pas détaillé :
+- bonne odeur
+- sent bon
+- odeur agréable
+Détaillé :
+- odeur appétissante
+- odeur naturelle
+- odeur fraîche
+- odeur légère
+- pas trop forte
+- odeur riche
+- odeur qui ne reste pas sur les mains
+
+Goût :
+Mention du goût ou de la saveur.
+Pas détaillé :
+- j’aime le goût
+- bon goût
+- goût agréable
+- me gusta el sabor
+Détaillé :
+- goût savoureux
 - goût naturel
+- riche en goût
+- goût équilibré
 - pas trop fort
-- bien équilibré
+- appétent
+- sabor natural
+- sabor equilibrado
+- sabor intenso pero agradable
 
-DÉFINITION DU THÈME "Arrière-goût" :
-Utiliser "Arrière-goût" si la réponse exprime une perception de la persistance du goût après consommation.
-Elle peut être considérée comme non satisfaisante si l'arrière-goût est mentionné sans précision.
+Texture :
+Mention de la texture de la pâtée.
+Pas détaillé :
+- j’aime la texture
+- bonne texture
+- textura agradable
+Détaillé :
+- texture crémeuse
+- texture onctueuse
+- texture lisse
+- texture ferme
+- texture moelleuse
+- assez humide
+- pas sèche
+- textura cremosa
+- textura suave
+- textura húmeda
+- textura firme
 
-Exemples détaillés :
-- agréable
-- léger
+Morceaux :
+Mention des morceaux dans la pâtée.
+Pas détaillé :
+- bons morceaux
+- morceaux bien
+Détaillé :
+- morceaux tendres
+- morceaux réguliers
+- morceaux naturels
+- morceaux moelleux
+- morceaux trop gros
+- morceaux trop petits
+- bonne taille
+- bonne forme
+
+Arrière-goût :
+Mention du goût qui reste après consommation.
+Pas détaillé :
+- bon arrière-goût
+- arrière-goût agréable
+Détaillé :
+- arrière-goût léger
 - ne reste pas trop longtemps
 - persistant mais plaisant
+- pas désagréable après coup
 
-DÉFINITION DU THÈME "Qualité" :
-Utiliser "Qualité" si la réponse exprime un jugement global sur la qualité perçue du produit,
-sans parler directement d’un bénéfice santé pour le chat.
-
-Exemples :
-- produit de bonne qualité
-- ingrédients de qualité
-- produit premium
-- rassurant
-- inspire confiance
-
-La mention peut être considérée comme non satisfaisante si elle reste vague, par exemple :
+Qualité :
+Jugement sur la qualité perçue du produit.
+Pas détaillé :
 - bonne qualité
 - qualitatif
 - ça a l’air bien
+Détaillé :
+- ingrédients de qualité
+- produit premium
+- produit rassurant
+- inspire confiance
+- composition rassurante
 
-DÉFINITION DU THÈME "Santé" :
-Utiliser "Santé" si la réponse exprime une perception des bénéfices santé de la pâtée pour chat,
-apportés au chat via la consommation, ou relative au comportement du chat vis-à-vis de la pâtée.
-
-Exemples :
-- enthousiasme du chat
-- le chat a tout mangé
-- il en redemandait
-- digestion facilitée
-- chat en bonne santé
-- pelage plus brillant
-- haleine plus saine
-- chat plus joueur
-- chat plus calme
-- chat en confiance
-- chat intrigué
-- chat intéressé
-- chat a mangé plus vite
-- chat a tout mangé
-- chat en a redemandé
-- chat a léché le bol
-
-STATUTS :
-- "Oui - Détaillé" → info concrète, observable ou actionnable
-- "Oui - Pas détaillé" → mention vague ou générale
-- "Non" → non mentionné
-
-EXEMPLES SUFFISANTS :
-- odeur trop forte
-- texture trop sèche
-- texture juste assez humide
-- texture onctueuse et appétissante
-- morceaux trop gros
-- pack facile à ouvrir
-- mon chat a mangé tout de suite
-- il a léché la gamelle
-- bonne couleur naturelle
-- produit de qualité
-
-EXEMPLES INSUFFISANTS :
-- bonne odeur
-- bonne texture
+Santé :
+Mention d’un bénéfice santé ou du comportement du chat.
+Pas détaillé :
 - mon chat a aimé
-- bonne qualité
-- appétissant
-- naturel
+- c’est bon pour mon chat
+Détaillé :
+- mon chat a tout mangé
+- il a léché la gamelle
+- il en redemandait
+- bonne digestion
+- pelage plus brillant
+- chat plus joueur
+- chat intéressé
 
-RÈGLE : PAS DE RELANCE
-Si le répondant dit :
+Général :
+Perception globale du produit.
+Pas détaillé :
+- j’aime ce produit
+- c’est bien
+- bon produit
+Détaillé :
+- produit original
+- produit rassurant
+- produit frais
+- bonne impression globale
+- produit classique mais efficace
+
+RÈGLE IMPORTANTE SUR LES ITEMS DÉTAILLÉS :
+Si un thème est déjà détaillé, ne pas relancer dessus.
+
+Exemple :
+Réponse : "J’aime le goût et la texture crémeuse"
+Analyse :
+- Goût = "Oui - Pas détaillé"
+- Texture = "Oui - Détaillé"
+Relance :
+"Pouvez-vous préciser ce que vous avez aimé dans le goût de cette pâtée pour chat ?"
+
+Exemple :
+Réponse : "Me gusta el sabor y la textura cremosa."
+Analyse :
+- Goût = "Oui - Pas détaillé"
+- Texture = "Oui - Détaillé"
+Relance :
+"¿Puede precisar qué le gustó del sabor de esta comida para gatos?"
+
+RÈGLE MULTI-ITEMS PAS ASSEZ DÉTAILLÉS :
+Si plusieurs thèmes sont "Oui - Pas détaillé", la relance doit citer tous ces thèmes.
+
+Exemple :
+Réponse : "J’aime le goût, l’odeur et la texture"
+Analyse :
+- Goût = "Oui - Pas détaillé"
+- Odeur/Arome = "Oui - Pas détaillé"
+- Texture = "Oui - Pas détaillé"
+Relance :
+"Pouvez-vous préciser ce que vous avez aimé dans le goût, l’odeur et la texture de cette pâtée pour chat ?"
+
+Exemple :
+Réponse : "Me gusta el sabor, el olor y la textura"
+Analyse :
+- Goût = "Oui - Pas détaillé"
+- Odeur/Arome = "Oui - Pas détaillé"
+- Texture = "Oui - Pas détaillé"
+Relance :
+"¿Puede precisar qué le gustó del sabor, el olor y la textura de esta comida para gatos?"
+
+RÈGLE PAS DE RELANCE :
+Si le répondant dit qu’il n’a rien aimé ou ne sait pas :
 - rien
 - je ne sais pas
 - rien ne m’a plu
 - aucun
 - nothing
+- nada
+- no sé
 
-ALORS :
-- remplir les thèmes concernés ou mettre "Non" si aucun thème n’est mentionné
+Alors :
 - relance = "Réponse suffisamment détaillée ✅"
 
-RÈGLE : HORS SUJET
-Si la réponse ne parle PAS du produit (ex : météo, ensoleillement, lieu, pièce, questionnaire…)
-
-ALORS :
-- tous les thèmes = "Non"
-- relance = "${relanceHorsSujet}"
-
-Exemples hors sujet :
-- J’ai aimé le niveau d’ensoleillement
-- La pièce était agréable
-- Le questionnaire était simple
-
-RÈGLE ANTI-SURINTERPRÉTATION :
-Ne jamais associer un mot à un thème par approximation.
-- "ensoleillement" ≠ apparence
-- "ambiance" ≠ odeur
-- "moment" ≠ goût
-
-RÈGLES DE RELANCE :
-- UNE seule question
-- UNE seule phrase
-- courte
-- concrète
-- neutre
-- max 35 mots
-
-RÈGLE FINALE DE DÉCISION :
-- Si au moins un thème est "Oui - Pas détaillé", génère une relance courte et ciblée
+RÈGLE FINALE :
+- Si au moins un thème est "Oui - Pas détaillé", génère UNE seule relance courte sur tous les thèmes pas assez détaillés.
 - Si aucun thème n’est "Oui - Pas détaillé", mets exactement :
-  "Réponse suffisamment détaillée ✅"
+"Réponse suffisamment détaillée ✅"
 
+CONTRAINTES DE RELANCE :
+- Une seule phrase.
+- Courte.
+- Neutre.
+- Maximum 35 mots.
+- Même langue que la réponse consommateur.
+- Aucun préfixe technique.
 
-FORMAT DE SORTIE (JSON STRICT) :
+FORMAT DE SORTIE JSON STRICT :
 {
   "analyse": {
     "Packaging": "",
@@ -383,7 +407,7 @@ FORMAT DE SORTIE (JSON STRICT) :
       {
         role: "system",
         content:
-          'Réponds uniquement avec un JSON valide. Aucun texte hors JSON. Si aucune relance n’est nécessaire, mets exactement "Réponse suffisamment détaillée ✅".'
+          'Réponds uniquement avec un JSON valide. Aucun texte hors JSON. La relance doit être dans la même langue que la réponse consommateur. Ne jamais ajouter de préfixe comme "Q2.bis", "Question complémentaire" ou "Relance".'
       },
       {
         role: "user",
@@ -409,7 +433,6 @@ FORMAT DE SORTIE (JSON STRICT) :
     }
 
     return res.json(jsonOutput);
-
   } catch (err) {
     console.error("Erreur Mistral :", err);
 
@@ -421,6 +444,7 @@ FORMAT DE SORTIE (JSON STRICT) :
 });
 
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
   console.log(`Serveur prêt sur le port ${PORT} ✅`);
 });
