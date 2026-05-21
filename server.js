@@ -31,14 +31,10 @@ function emptyAnalyse() {
 }
 
 function extractJson(text) {
-
   try {
     return JSON.parse(text);
-
   } catch {
-
     const match = String(text).match(/\{[\s\S]*\}/);
-
     if (!match) return null;
 
     try {
@@ -50,16 +46,9 @@ function extractJson(text) {
 }
 
 function isValidResponse(obj) {
-
   if (!obj || typeof obj !== "object") return false;
-
-  if (!obj.analyse || typeof obj.analyse !== "object") {
-    return false;
-  }
-
-  if (typeof obj.relance !== "string") {
-    return false;
-  }
+  if (!obj.analyse || typeof obj.analyse !== "object") return false;
+  if (typeof obj.relance !== "string") return false;
 
   const expectedThemes = [
     "Packaging",
@@ -80,29 +69,18 @@ function isValidResponse(obj) {
 }
 
 async function callMistral(messages, retries = 2) {
-
   try {
-
     return await client.chat.complete({
       model: "open-mistral-nemo",
       messages,
       temperature: 0
     });
-
   } catch (err) {
-
     const msg = String(err?.message || "");
 
     if (retries > 0 && msg.includes("429")) {
-
-      await new Promise(resolve =>
-        setTimeout(resolve, 1200)
-      );
-
-      return callMistral(
-        messages,
-        retries - 1
-      );
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      return callMistral(messages, retries - 1);
     }
 
     throw err;
@@ -110,17 +88,13 @@ async function callMistral(messages, retries = 2) {
 }
 
 app.post("/analyseIA", async (req, res) => {
-
   const texte = (req.body.texte || "").trim();
 
   try {
-
     if (!process.env.MISTRAL_API_KEY) {
-
       return res.json({
         analyse: emptyAnalyse(),
-        relance:
-          "Réponse suffisamment détaillée ✅"
+        relance: "Réponse suffisamment détaillée ✅"
       });
     }
 
@@ -133,13 +107,13 @@ QUESTION POSÉE :
 Qu’avez-vous aimé dans cette pâtée pour chat ?
 
 OBJECTIF :
-- Détecter la langue utilisée dans le texte à analyser
+- Détecter la langue utilisée dans le texte à analyser.
 - Vérifier si la réponse parle bien du produit.
 - Identifier les thèmes mentionnés.
 - Déterminer si chaque thème est détaillé ou non.
 - Générer UNE seule relance si nécessaire.
 - Relancer UNIQUEMENT sur les thèmes insuffisamment détaillés.
-- Si la relance est nécessaire elle doit Être formulée dans la MEME langue que la réponse analysée
+- Si une relance est nécessaire, elle doit être formulée dans la MÊME langue que la réponse analysée.
 
 IMPORTANT :
 Tu n’es PAS un chatbot.
@@ -149,15 +123,12 @@ Tu ne commentes jamais.
 Tu produis UNIQUEMENT le JSON demandé.
 
 RÈGLE DE LANGUE OBLIGATOIRE :
-
-La langue de la relance doit dépendre UNIQUEMENT de la langue de la réponse consommateur,
-et PAS de la langue du prompt.
+La langue de la relance doit dépendre UNIQUEMENT de la langue de la réponse consommateur, et PAS de la langue du prompt.
 
 Exemples :
-- "I like the taste" → relance en anglais
-- "Me gusta el sabor" → relance en espagnol
-- "J’aime le goût" → relance en français
-
+- "I like the taste" → relance en anglais.
+- "Me gusta el sabor" → relance en espagnol.
+- "J’aime le goût" → relance en français.
 
 RÉPONSE CONSOMMATEUR :
 "${texte}"
@@ -180,19 +151,11 @@ STATUTS POSSIBLES :
 - "Non"
 
 RÈGLE CRITIQUE PRIORITAIRE :
-
-Le niveau de détail dépend UNIQUEMENT
-de la précision des caractéristiques mentionnées,
-ET JAMAIS de la longueur de la réponse.
+Le niveau de détail dépend UNIQUEMENT de la précision des caractéristiques mentionnées, ET JAMAIS de la longueur de la réponse.
 
 Une réponse très courte peut être totalement suffisante.
 
-Si un thème contient au moins un descripteur :
-- concret
-- observable
-- spécifique
-
-alors ce thème doit être :
+Si un thème contient au moins un descripteur concret, observable ou spécifique, alors ce thème doit être :
 "Oui - Détaillé"
 
 et il ne faut JAMAIS relancer dessus.
@@ -215,12 +178,9 @@ Exemples SUFFISAMMENT détaillés :
 - mon chat a tout mangé
 - il a léché la gamelle
 
-Même si la réponse est très courte,
-elle doit être considérée comme suffisamment détaillée
-si un descripteur précis est présent et acompagné d'un descriptif/adjectif. 
+Même si la réponse est très courte, elle doit être considérée comme suffisamment détaillée si un descripteur précis est présent.
 
 EXEMPLES :
-
 Réponse :
 "J’aime la texture crémeuse"
 
@@ -248,9 +208,7 @@ Analyse correcte :
 Relance correcte :
 "Réponse suffisamment détaillée ✅"
 
-À L’INVERSE :
-
-Exemples PAS assez détaillés :
+À L’INVERSE, exemples PAS assez détaillés :
 - bonne texture
 - j’aime la texture
 - texture agréable
@@ -264,7 +222,6 @@ Ces réponses doivent être :
 "Oui - Pas détaillé"
 
 RÈGLE PRODUIT :
-
 La réponse doit parler :
 - du produit
 - de la pâtée pour chat
@@ -273,8 +230,6 @@ La réponse doit parler :
 - ou des caractéristiques du produit.
 
 Si la réponse ne parle PAS du produit :
-
-ALORS :
 - tous les thèmes = "Non"
 - relance dans la langue du répondant
 - demander de se concentrer sur la pâtée pour chat
@@ -288,7 +243,6 @@ Exemples hors sujet :
 - I liked the room
 
 RÈGLE ANTI-SURINTERPRÉTATION :
-
 Ne jamais associer des mots à des thèmes par approximation.
 
 Exemples :
@@ -297,71 +251,37 @@ Exemples :
 - "moment agréable" ≠ goût
 
 DÉFINITIONS DES THÈMES :
-
-Packaging :
-emballage, paquet, ouverture, fermeture, rangement, lisibilité.
-
-Apparence :
-aspect visuel, couleur, homogénéité, aspect naturel.
-
-Odeur/Arome :
-odeur, arôme, parfum.
-
-Goût :
-goût, saveur, appétence.
-
-Texture :
-texture, consistance, humidité, onctuosité.
-
-Morceaux :
-taille, forme, tendreté, homogénéité des morceaux.
-
-Arrière-goût :
-goût persistant après consommation.
-
-Qualité :
-qualité perçue, premium, confiance.
-
-Santé :
-effets sur le chat, digestion, comportement du chat.
-
-Général :
-impression générale du produit.
+Packaging : emballage, paquet, ouverture, fermeture, rangement, lisibilité.
+Apparence : aspect visuel, couleur, homogénéité, aspect naturel.
+Odeur/Arome : odeur, arôme, parfum.
+Goût : goût, saveur, appétence.
+Texture : texture, consistance, humidité, onctuosité.
+Morceaux : taille, forme, tendreté, homogénéité des morceaux.
+Arrière-goût : goût persistant après consommation.
+Qualité : qualité perçue, premium, confiance.
+Santé : effets sur le chat, digestion, comportement du chat.
+Général : impression générale du produit.
 
 RÈGLE DE RELANCE :
-
-Si plusieurs thèmes sont :
-"Oui - Pas détaillé"
-
-ALORS :
-la relance doit mentionner TOUS ces thèmes.
+Si plusieurs thèmes sont "Oui - Pas détaillé", la relance doit mentionner TOUS ces thèmes.
 
 Exemple :
 "J’aime le goût et l’odeur"
-
-Analyse :
-- Goût = "Oui - Pas détaillé"
-- Odeur/Arome = "Oui - Pas détaillé"
-
 Relance :
 "Pouvez-vous préciser ce que vous avez aimé dans le goût et l’odeur de cette pâtée pour chat ?"
 
 Exemple :
 "I like the taste and smell"
-
 Relance :
 "Could you specify what you liked about the taste and smell of this cat food?"
 
 Exemple :
 "Me gusta el sabor y el olor"
-
 Relance :
 "¿Puede precisar qué le gustó del sabor y del olor de esta comida para gatos?"
 
 RÈGLE IMPORTANTE :
-
-Si un thème est déjà détaillé,
-il ne doit JAMAIS apparaître dans la relance.
+Si un thème est déjà détaillé, il ne doit JAMAIS apparaître dans la relance.
 
 Exemple :
 "J’aime le goût et la texture crémeuse"
@@ -374,7 +294,6 @@ Relance correcte :
 "Pouvez-vous préciser ce que vous avez aimé dans le goût de cette pâtée pour chat ?"
 
 RÈGLE PAS DE RELANCE :
-
 Si le répondant dit :
 - rien
 - je ne sais pas
@@ -386,20 +305,11 @@ Si le répondant dit :
 - no sé
 
 ALORS :
-relance =
-"Réponse suffisamment détaillée ✅"
+relance = "Réponse suffisamment détaillée ✅"
 
 RÈGLE FINALE :
-
-- Si au moins un thème =
-"Oui - Pas détaillé"
-
-→ générer UNE seule relance.
-
-- Si aucun thème n’est :
-"Oui - Pas détaillé"
-
-→ mettre EXACTEMENT :
+- Si au moins un thème = "Oui - Pas détaillé", générer UNE seule relance.
+- Si aucun thème n’est "Oui - Pas détaillé", mettre EXACTEMENT :
 "Réponse suffisamment détaillée ✅"
 
 CONTRAINTES DE RELANCE :
@@ -410,7 +320,6 @@ CONTRAINTES DE RELANCE :
 - même langue que le répondant
 
 FORMAT JSON STRICT :
-
 {
   "analyse": {
     "Packaging": "",
@@ -431,8 +340,7 @@ FORMAT JSON STRICT :
     const response = await callMistral([
       {
         role: "system",
-        content:
-          "Réponds UNIQUEMENT avec un JSON valide. Aucun texte hors JSON."
+        content: "Réponds UNIQUEMENT avec un JSON valide. Aucun texte hors JSON."
       },
       {
         role: "user",
@@ -440,45 +348,31 @@ FORMAT JSON STRICT :
       }
     ]);
 
-    let output =
-      response.choices?.[0]?.message?.content || "";
+    let output = response.choices?.[0]?.message?.content || "";
 
     if (Array.isArray(output)) {
-
-      output = output
-        .map(x => x.text || "")
-        .join("")
-        .trim();
-
+      output = output.map(x => x.text || "").join("").trim();
     } else {
-
       output = String(output).trim();
     }
 
     const jsonOutput = extractJson(output);
 
-    if (
-      !jsonOutput ||
-      !isValidResponse(jsonOutput)
-    ) {
-
+    if (!jsonOutput || !isValidResponse(jsonOutput)) {
       return res.json({
         analyse: emptyAnalyse(),
-        relance:
-          "Réponse suffisamment détaillée ✅"
+        relance: "Réponse suffisamment détaillée ✅"
       });
     }
 
     return res.json(jsonOutput);
 
   } catch (err) {
-
     console.error("Erreur Mistral :", err);
 
     return res.json({
       analyse: emptyAnalyse(),
-      relance:
-        "Réponse suffisamment détaillée ✅"
+      relance: "Réponse suffisamment détaillée ✅"
     });
   }
 });
@@ -486,8 +380,5 @@ FORMAT JSON STRICT :
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-
-  console.log(
-    \`Serveur prêt sur le port \${PORT} ✅\`
-  );
+  console.log("Serveur prêt sur le port " + PORT);
 });
