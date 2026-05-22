@@ -99,58 +99,143 @@ app.post("/analyseIA", async (req, res) => {
     }
 
     const prompt = `
-Tu analyses une réponse ouverte à la question :
-"Qu’avez-vous aimé dans cette pâtée pour chat ?"
+Tu analyses une réponse ouverte à propos d'une pâtée pour chat.
 
-Réponse consommateur :
+QUESTION :
+Qu'avez-vous aimé dans cette pâtée pour chat ?
+
+RÉPONSE À ANALYSER :
 "${texte}"
 
-TÂCHE :
-1. Détecte la langue de la réponse.
-2. Réponds avec une relance dans la même langue.
-3. Identifie uniquement les thèmes mentionnés parmi :
-Packaging, Apparence, Odeur/Arome, Goût, Morceaux, Texture, Arrière-goût, Qualité, Santé, Général.
-4. Pour chaque thème mentionné, décide :
-- "Oui - Détaillé" si le thème est caractérisé par un mot précis.
-- "Oui - Pas détaillé" si le thème est seulement cité sans précision.
-- "Non" si le thème n’est pas mentionné.
-5. Si au moins un thème est "Oui - Pas détaillé", fais UNE seule relance qui demande de détailler TOUS ces thèmes.
-6. Si tous les thèmes mentionnés sont détaillés, mets exactement :
+OBJECTIF :
+Tu dois identifier les thèmes mentionnés, dire s'ils sont détaillés ou non, puis faire une relance uniquement si nécessaire.
+
+RÈGLE DE LANGUE :
+- Détecte la langue de la réponse.
+- Si une relance est nécessaire, elle doit être dans la même langue que la réponse.
+- Si la réponse est en français, relance en français.
+- Si la réponse est en anglais, relance en anglais.
+- Si la réponse est en espagnol, relance en espagnol.
+
+THÈMES POSSIBLES :
+- Packaging
+- Apparence
+- Odeur/Arome
+- Goût
+- Morceaux
+- Texture
+- Arrière-goût
+- Qualité
+- Santé
+- Général
+
+STATUTS POSSIBLES :
+- "Oui - Détaillé"
+- "Oui - Pas détaillé"
+- "Non"
+
+RÈGLE PRINCIPALE :
+Un thème est "Oui - Détaillé" dès qu'il est accompagné d'un adjectif, d'une précision ou d'une caractéristique pertinente.
+
+La longueur de la réponse ne compte pas.
+Une réponse courte peut être suffisante.
+
+Exemples :
+- "texture crémeuse" = Texture détaillée
+- "texture onctueuse" = Texture détaillée
+- "texture pas trop humide" = Texture détaillée
+- "goût pas trop intense" = Goût détaillé
+- "goût naturel" = Goût détaillé
+- "odeur légère" = Odeur/Arome détaillé
+- "morceaux tendres" = Morceaux détaillé
+- "pack pratique" = Packaging détaillé
+- "mon chat était en meilleure santé" = Santé détaillé
+- "mon chat a tout mangé" = Santé détaillé
+
+À l'inverse, un thème est "Oui - Pas détaillé" s'il est seulement cité sans adjectif, sans précision ou sans caractéristique.
+
+Exemples :
+- "j'aime le goût" = Goût pas détaillé
+- "j'aime la texture" = Texture pas détaillée
+- "j'aime l'odeur" = Odeur/Arome pas détaillé
+- "j'aime les morceaux" = Morceaux pas détaillé
+- "mon chat a aimé" = Santé pas détaillé
+- "bonne qualité" = Qualité pas détaillée
+- "bon produit" = Général pas détaillé
+
+RÈGLE DE RELANCE :
+- Si aucun thème n'est "Oui - Pas détaillé", la relance doit être exactement :
 "Réponse suffisamment détaillée ✅"
 
-RÈGLE ESSENTIELLE :
-La longueur de la réponse ne compte pas.
-Seul le niveau de détail des thèmes mentionnés compte.
+- Si un ou plusieurs thèmes sont "Oui - Pas détaillé", fais UNE SEULE relance.
+- Cette relance doit demander de préciser TOUS les thèmes pas détaillés.
+- Ne relance jamais sur un thème déjà détaillé.
 
-EXEMPLES :
-"J’aime le goût pas trop intense" :
-Goût = "Oui - Détaillé"
+EXEMPLES DE COMPORTEMENT :
 
-"J’aime le goût" :
-Goût = "Oui - Pas détaillé"
+Réponse :
+"J'ai aimé le goût et la texture onctueuse et crémeuse."
 
-"J’aime la texture crémeuse" :
-Texture = "Oui - Détaillé"
+Analyse :
+- Goût = "Oui - Pas détaillé"
+- Texture = "Oui - Détaillé"
 
-"J’aime la texture" :
-Texture = "Oui - Pas détaillé"
+Relance :
+"Pouvez-vous préciser ce que vous avez aimé dans le goût de cette pâtée pour chat ?"
 
-"Mon chat était en meilleure santé" :
-Santé = "Oui - Détaillé"
+Réponse :
+"J'ai aimé le goût pas trop intense, et aussi la texture et mon chat était en meilleure santé."
 
-"Mon chat a aimé" :
-Santé = "Oui - Pas détaillé"
+Analyse :
+- Goût = "Oui - Détaillé"
+- Texture = "Oui - Pas détaillé"
+- Santé = "Oui - Détaillé"
 
-"J'ai aimé le goût pas trop intense, et aussi la texture et mon chat était en meilleure santé." :
-Goût = "Oui - Détaillé"
-Texture = "Oui - Pas détaillé"
-Santé = "Oui - Détaillé"
-Relance = "Pouvez-vous préciser ce que vous avez aimé dans la texture de cette pâtée pour chat ?"
+Relance :
+"Pouvez-vous préciser ce que vous avez aimé dans la texture de cette pâtée pour chat ?"
+
+Réponse :
+"I liked the creamy but not too wet texture, as well as the smell and the taste."
+
+Analyse :
+- Texture = "Oui - Détaillé"
+- Odeur/Arome = "Oui - Pas détaillé"
+- Goût = "Oui - Pas détaillé"
+
+Relance :
+"Could you specify what you liked about the smell and taste of this cat food?"
+
+Réponse :
+"Me gustó la textura cremosa pero no demasiado húmeda, así como el olor y el sabor."
+
+Analyse :
+- Texture = "Oui - Détaillé"
+- Odeur/Arome = "Oui - Pas détaillé"
+- Goût = "Oui - Pas détaillé"
+
+Relance :
+"¿Puede precisar qué le gustó del olor y del sabor de esta comida para gatos?"
 
 RÈGLE HORS SUJET :
-Si la réponse ne parle pas de la pâtée, du produit ou du chat :
+Si la réponse ne parle pas du produit, de la pâtée pour chat, du chat ou d'une caractéristique du produit :
 - tous les thèmes = "Non"
-- demande dans la même langue de se concentrer sur la pâtée pour chat et de préciser ce qui a plu dans le produit.
+- relance dans la même langue
+- demander de se concentrer sur la pâtée pour chat et de préciser ce qui a plu dans le produit.
+
+RÈGLE PAS DE RELANCE :
+Si le répondant dit qu'il n'a rien aimé ou ne sait pas :
+- rien
+- RAS
+- je ne sais pas
+- rien ne m'a plu
+- aucun
+- nothing
+- no
+- nada
+- no sé
+
+Alors :
+relance = "Réponse suffisamment détaillée ✅"
 
 FORMAT JSON STRICT :
 {
@@ -173,7 +258,8 @@ FORMAT JSON STRICT :
     const response = await callMistral([
       {
         role: "system",
-        content: "Réponds UNIQUEMENT avec un JSON valide. Aucun texte hors JSON."
+        content:
+          "Réponds uniquement avec un JSON valide. Aucun texte hors JSON. La relance doit être dans la même langue que la réponse analysée."
       },
       {
         role: "user",
