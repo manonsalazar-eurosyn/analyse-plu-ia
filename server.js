@@ -94,7 +94,7 @@ app.post("/analyseIA", async (req, res) => {
     if (!process.env.MISTRAL_API_KEY) {
       return res.json({
         analyse: emptyAnalyse(),
-        relance: "Réponse suffisamment détaillée ✅"
+        relance: "Réponse suffisamment détaillée"
       });
     }
 
@@ -165,7 +165,7 @@ Exemples :
 
 RÈGLE DE RELANCE :
 - Si aucun thème n'est "Oui - Pas détaillé", la relance doit être exactement :
-"Réponse suffisamment détaillée ✅"
+"Réponse suffisamment détaillée"
 
 - Si un ou plusieurs thèmes sont "Oui - Pas détaillé", fais UNE SEULE relance.
 - Cette relance doit demander de préciser TOUS les thèmes pas détaillés.
@@ -235,7 +235,7 @@ Si le répondant dit qu'il n'a rien aimé ou ne sait pas :
 - no sé
 
 Alors :
-relance = "Réponse suffisamment détaillée ✅"
+relance = "Réponse suffisamment détaillée"
 
 FORMAT JSON STRICT :
 {
@@ -280,7 +280,7 @@ FORMAT JSON STRICT :
     if (!jsonOutput || !isValidResponse(jsonOutput)) {
       return res.json({
         analyse: emptyAnalyse(),
-        relance: "Réponse suffisamment détaillée ✅"
+        relance: "Réponse suffisamment détaillée"
       });
     }
 
@@ -291,7 +291,7 @@ FORMAT JSON STRICT :
 
     return res.json({
       analyse: emptyAnalyse(),
-      relance: "Réponse suffisamment détaillée ✅"
+      relance: "Réponse suffisamment détaillée"
     });
   }
 });
