@@ -195,6 +195,17 @@ Relance :
 "Pouvez-vous préciser ce que vous avez aimé dans le goût de cette pâtée pour chat ?"
 
 Réponse :
+"J'aime le packaging, l'odeur et l'apparence."
+
+Analyse :
+- Packaging = "Oui - Pas détaillé"
+- Odeur = "Oui - Pas détaillé"
+- Apparence = "Oui - Pas détaillé"
+
+Relance :
+"Pouvez-vous préciser ce que vous avez aimé dans le packaging, l'odeur et l'apparence de cette pâtée pour chat ?"
+
+Réponse :
 "J'ai aimé le goût pas trop intense, et aussi la texture et mon chat était en meilleure santé."
 
 Analyse :
