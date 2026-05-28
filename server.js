@@ -168,7 +168,7 @@ RÈGLE DE RELANCE :
 "Réponse suffisamment détaillée"
 
 - Si un ou plusieurs thèmes sont "Oui - Pas détaillé", fais UNE SEULE relance.
-- Cette relance doit demander de préciser TOUS les thèmes pas détaillés.
+- Cette relance doit demander de préciser TOUS les thèmes ayant pour statut "Oui - Pas détaillé".
 - Ne relance jamais sur un thème déjà détaillé.
 
 EXEMPLES DE COMPORTEMENT :
