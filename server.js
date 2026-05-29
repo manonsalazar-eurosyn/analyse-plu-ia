@@ -74,7 +74,8 @@ function detectThemes(texte) {
   ])) themes.push("Goût");
 
   if (containsAny(t, [
-    "morceau", "morceaux", "bout", "pieces", "chunks", "trozos", "pedazos"
+    "morceau", "morceaux", "bout", "quantite de morceaux", "quantite",
+    "pieces", "chunks", "trozos", "pedazos"
   ])) themes.push("Morceaux");
 
   if (containsAny(t, [
@@ -171,22 +172,164 @@ Pour chacun des thèmes détectés automatiquement, dis seulement s'il est :
 - "Oui - Détaillé"
 - "Oui - Pas détaillé"
 
-RÈGLES :
+RÈGLES PRIORITAIRES :
 - Il est interdit de mettre "Non" pour un thème détecté automatiquement.
-- Un thème est "Oui - Détaillé" s'il est accompagné d'un adjectif, d'une précision ou d'une caractéristique pertinente.
-- Un thème est "Oui - Pas détaillé" s'il est seulement cité sans précision.
+- Un thème n'est PAS détaillé simplement parce qu'il est mentionné.
+- Pour être "Oui - Détaillé", le répondant doit décrire une caractéristique du thème lui-même.
+- Pour être "Oui - Pas détaillé", le répondant mentionne simplement le thème ou exprime son appréciation sans le caractériser.
 - Ne rédige pas la relance.
 
+
+RÈGLE ABSOLUE :
+
+Les mots suivants ne constituent PAS un détail :
+
+- bien
+- beaucoup
+- vraiment
+- très
+- assez
+- particulièrement
+- énormément
+- adoré
+- apprécié
+- aimé
+
+Ces mots expriment uniquement l'intensité de l'appréciation.
+
 Exemples :
-- "texture crémeuse" = Texture détaillée
-- "texture onctueuse" = Texture détaillée
-- "texture pas trop humide" = Texture détaillée
-- "goût pas trop intense" = Goût détaillé
-- "odeur naturelle" = Odeur/Arome détaillé
-- "j'aime la texture" = Texture pas détaillée
-- "j'aime l'odeur" = Odeur/Arome pas détaillé
-- "j'aime le goût" = Goût pas détaillé
-- "j'aime la texture et l'odeur" = Texture pas détaillée + Odeur/Arome pas détaillé
+
+- "j'ai bien aimé la texture"
+  => Texture = Oui - Pas détaillé
+
+- "j'ai beaucoup aimé le goût"
+  => Goût = Oui - Pas détaillé
+
+- "j'ai vraiment aimé le packaging"
+  => Packaging = Oui - Pas détaillé
+
+- "j'ai adoré les morceaux"
+  => Morceaux = Oui - Pas détaillé
+
+Pour être détaillé, la précision doit décrire le thème lui-même.
+
+EXEMPLES OBLIGATOIRES :
+
+TEXTURE
+
+- "j'aime la texture"
+  => Oui - Pas détaillé
+
+- "j'ai bien aimé la texture"
+  => Oui - Pas détaillé
+
+- "texture crémeuse"
+  => Oui - Détaillé
+
+- "texture onctueuse"
+  => Oui - Détaillé
+
+- "texture pas trop humide"
+  => Oui - Détaillé
+
+- "texture ferme"
+  => Oui - Détaillé
+
+ODEUR / AROME
+
+- "j'aime l'odeur"
+  => Oui - Pas détaillé
+
+- "odeur naturelle"
+  => Oui - Détaillé
+
+- "odeur légère"
+  => Oui - Détaillé
+
+- "odeur appétissante"
+  => Oui - Détaillé
+
+GOÛT
+
+- "j'aime le goût"
+  => Oui - Pas détaillé
+
+- "goût pas trop intense"
+  => Oui - Détaillé
+
+- "goût naturel"
+  => Oui - Détaillé
+
+- "goût prononcé"
+  => Oui - Détaillé
+
+PACKAGING
+
+- "j'aime le packaging"
+  => Oui - Pas détaillé
+
+- "j'ai bien aimé le packaging"
+  => Oui - Pas détaillé
+
+- "packaging facile à ouvrir"
+  => Oui - Détaillé
+
+- "facile à ouvrir"
+  => Oui - Détaillé
+
+- "packaging pratique"
+  => Oui - Détaillé
+
+- "format adapté"
+  => Oui - Détaillé
+
+MORCEAUX
+
+- "j'aime les morceaux"
+  => Oui - Pas détaillé
+
+- "j'ai bien aimé les morceaux"
+  => Oui - Pas détaillé
+
+- "quantité de morceaux pas mal"
+  => Oui - Détaillé
+
+- "bonne quantité de morceaux"
+  => Oui - Détaillé
+
+- "beaucoup de morceaux"
+  => Oui - Détaillé
+
+- "morceaux tendres"
+  => Oui - Détaillé
+
+- "taille des morceaux adaptée"
+  => Oui - Détaillé
+
+QUALITÉ
+
+- "qualité"
+  => Oui - Pas détaillé
+
+- "bonne qualité"
+  => Oui - Détaillé
+
+- "ingrédients de qualité"
+  => Oui - Détaillé
+
+SANTÉ
+
+- "mon chat a aimé"
+  => Oui - Pas détaillé
+
+- "mon chat a tout mangé"
+  => Oui - Détaillé
+
+- "mon chat semblait en meilleure santé"
+  => Oui - Détaillé
+
+- "meilleure digestion"
+  => Oui - Détaillé
 
 FORMAT JSON STRICT :
 {
