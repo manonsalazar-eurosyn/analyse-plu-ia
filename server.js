@@ -1,4 +1,3 @@
-```js
 import express from "express";
 import cors from "cors";
 import { Mistral } from "@mistralai/mistralai";
@@ -10,6 +9,10 @@ app.use(express.json());
 
 const client = new Mistral({
   apiKey: process.env.MISTRAL_API_KEY
+});
+
+app.get("/", (req, res) => {
+  res.send("Serveur Mistral opérationnel ✅");
 });
 
 const THEMES = [
@@ -41,6 +44,66 @@ function normalize(txt) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+}
+
+function containsAny(text, words) {
+  return words.some(word => text.includes(word));
+}
+
+function detectThemes(texte) {
+  const t = normalize(texte);
+  const themes = [];
+
+  if (containsAny(t, [
+    "packaging", "pack", "emballage", "paquet", "sachet", "boite", "barquette",
+    "ouvrir", "fermer", "ouverture", "format", "envase", "paquete"
+  ])) themes.push("Packaging");
+
+  if (containsAny(t, [
+    "apparence", "aspect", "visuel", "couleur", "joli", "belle couleur",
+    "appearance", "look", "color", "colour", "aspecto"
+  ])) themes.push("Apparence");
+
+  if (containsAny(t, [
+    "odeur", "arome", "parfum", "sent", "odor", "odour", "smell", "aroma",
+    "olor"
+  ])) themes.push("Odeur/Arome");
+
+  if (containsAny(t, [
+    "gout", "saveur", "appetence", "taste", "flavour", "flavor", "sabor"
+  ])) themes.push("Goût");
+
+  if (containsAny(t, [
+    "morceau", "morceaux", "bout", "pieces", "chunks", "trozos", "pedazos"
+  ])) themes.push("Morceaux");
+
+  if (containsAny(t, [
+    "texture", "consistance", "cremeuse", "onctueuse", "lisse",
+    "humide", "seche", "ferme", "moelleuse", "creamy", "smooth",
+    "moist", "dry", "soft", "textura", "cremosa", "suave", "humeda"
+  ])) themes.push("Texture");
+
+  if (containsAny(t, [
+    "arriere-gout", "arriere gout", "aftertaste", "regusto"
+  ])) themes.push("Arrière-goût");
+
+  if (containsAny(t, [
+    "qualite", "qualitatif", "premium", "ingredient", "rassurant",
+    "quality", "ingredients", "calidad", "ingredientes"
+  ])) themes.push("Qualité");
+
+  if (containsAny(t, [
+    "sante", "digestion", "digere", "pelage", "mon chat", "chat a aime",
+    "chat a tout mange", "gamelle", "leche", "health", "my cat",
+    "bowl", "ate everything", "salud", "mi gato", "comio todo"
+  ])) themes.push("Santé");
+
+  if (containsAny(t, [
+    "produit", "global", "general", "bon produit", "original",
+    "product", "overall", "producto"
+  ])) themes.push("Général");
+
+  return [...new Set(themes)];
 }
 
 function extractJson(text) {
@@ -83,147 +146,69 @@ function isNoRelanceAnswer(texte) {
   return [
     "rien",
     "ras",
-    "aucun",
-    "aucune",
     "je ne sais pas",
+    "rien ne m a plu",
+    "aucun",
     "nothing",
-    "none",
     "no",
-    "nada"
-  ].some(value => t === normalize(value));
+    "nada",
+    "no se"
+  ].some(value => t === value || t.includes(value));
 }
 
-function validateAnalyse(rawAnalyse) {
-  const analyse = emptyAnalyse();
-
-  THEMES.forEach(theme => {
-    const value = rawAnalyse?.[theme];
-
-    if (
-      value === "Non" ||
-      value === "Oui - Détaillé" ||
-      value === "Oui - Pas détaillé"
-    ) {
-      analyse[theme] = value;
-    }
-  });
-
-  return analyse;
-}
-
-function getThemesPasDetailles(analyse) {
-  return THEMES.filter(theme => analyse[theme] === "Oui - Pas détaillé");
-}
-
-async function analyseAndRelanceWithMistral(texte) {
+async function analyseDetailsWithMistral(texte, themesDetectes) {
   const prompt = `
-Tu analyses une réponse ouverte de consommateur à propos d'une pâtée pour chat.
+Tu analyses une réponse ouverte à propos d'une pâtée pour chat.
 
 Réponse consommateur :
 "${texte}"
 
-TA MISSION :
-1. Identifier les thèmes présents dans la réponse.
-2. Dire pour chaque thème s'il est :
-   - "Non"
-   - "Oui - Détaillé"
-   - "Oui - Pas détaillé"
-3. Rédiger une relance uniquement si au moins un thème est "Oui - Pas détaillé".
+Thèmes détectés automatiquement dans la réponse :
+${themesDetectes.map(theme => "- " + theme).join("\n")}
 
-THÈMES À CODER :
-- Packaging
-- Apparence
-- Odeur/Arome
-- Goût
-- Morceaux
-- Texture
-- Arrière-goût
-- Qualité
-- Santé
-- Général
+TÂCHE :
+Pour chacun des thèmes détectés automatiquement, dis seulement s'il est :
+- "Oui - Détaillé"
+- "Oui - Pas détaillé"
 
-DÉFINITIONS DES THÈMES :
-- Packaging : emballage, format, ouverture, sachet, boîte, barquette, praticité du contenant.
-- Apparence : aspect visuel, couleur, présentation, apparence du produit.
-- Odeur/Arome : odeur, parfum, arôme senti par le consommateur.
-- Goût : goût, saveur, appétence, plaisir gustatif.
-- Morceaux : morceaux, bouts, chunks, taille ou quantité des morceaux.
-- Texture : texture, consistance, crémeux, onctueux, lisse, humide, sec, ferme.
-- Arrière-goût : arrière-goût, goût qui reste après consommation.
-- Qualité : qualité perçue, ingrédients, naturel, premium, confiance dans le produit.
-- Santé : digestion, bénéfice santé, effet sur le chat, bien-être du chat.
-- Général : avis global sur le produit sans thème précis.
+RÈGLES :
+- Il est interdit de mettre "Non" pour un thème détecté automatiquement.
+- Un thème est "Oui - Détaillé" s'il est accompagné d'un adjectif, d'une précision ou d'une caractéristique pertinente.
+- Un thème est "Oui - Pas détaillé" s'il est seulement cité sans précision.
+- Ne rédige pas la relance.
 
-RÈGLE TRÈS IMPORTANTE SUR LE NIVEAU DE DÉTAIL :
-La simple mention d'un thème n'est JAMAIS détaillée.
-
-Exemples PAS DÉTAILLÉS :
-- "J'aime la texture" → Texture = "Oui - Pas détaillé"
-- "J'aime l'odeur" → Odeur/Arome = "Oui - Pas détaillé"
-- "J'aime l'apparence" → Apparence = "Oui - Pas détaillé"
-- "J'aime les morceaux" → Morceaux = "Oui - Pas détaillé"
-- "J'aime la quantité de morceaux" → Morceaux = "Oui - Pas détaillé"
-- "J'aime la texture, l'apparence et la quantité de morceaux" → les 3 thèmes sont "Oui - Pas détaillé"
-
-Exemples DÉTAILLÉS :
-- "J'aime la texture crémeuse" → Texture = "Oui - Détaillé"
-- "J'aime la texture parce qu'elle est facile à manger" → Texture = "Oui - Détaillé"
-- "J'aime l'odeur naturelle" → Odeur/Arome = "Oui - Détaillé"
-- "J'aime l'apparence appétissante" → Apparence = "Oui - Détaillé"
-- "J'aime les petits morceaux" → Morceaux = "Oui - Détaillé"
-- "J'aime les morceaux bien répartis" → Morceaux = "Oui - Détaillé"
-
-ATTENTION :
-- "J'aime" ou "j'ai aimé" ne rend PAS un thème détaillé.
-- "Bon", "bien", "agréable", "joli" seuls sont souvent trop vagues.
-- Un thème est détaillé seulement si le consommateur donne une caractéristique, une raison, une précision concrète ou une description utile.
-- Si plusieurs thèmes sont cités mais non détaillés, ils doivent tous être relancés.
-- Ne considère jamais qu'un thème est détaillé juste parce qu'il est positif.
-
-LANGUE :
-- Détecte automatiquement la langue de la réponse consommateur.
-- La relance doit être dans la même langue que la réponse, quelle qu'elle soit.
-- Cela peut être français, anglais, espagnol, italien, allemand, néerlandais, portugais, arabe, chinois, japonais, etc.
-- Ne traduis pas la réponse consommateur.
-- Ne limite pas ton analyse à quelques langues.
-
-RELANCE :
-- Si tous les thèmes présents sont détaillés, écris exactement : "Réponse suffisamment détaillée"
-- Si aucun thème clair n'est présent, demande de se concentrer sur la pâtée pour chat, dans la langue détectée.
-- Sinon, rédige UNE seule question courte.
-- La question doit relancer uniquement les thèmes en "Oui - Pas détaillé".
-- Ne relance jamais les thèmes déjà "Oui - Détaillé".
-- Ne mentionne jamais les thèmes en "Non".
-- Maximum 35 mots.
-- Pas de préfixe technique.
+Exemples :
+- "texture crémeuse" = Texture détaillée
+- "texture onctueuse" = Texture détaillée
+- "texture pas trop humide" = Texture détaillée
+- "goût pas trop intense" = Goût détaillé
+- "odeur naturelle" = Odeur/Arome détaillé
+- "j'aime la texture" = Texture pas détaillée
+- "j'aime l'odeur" = Odeur/Arome pas détaillé
+- "j'aime le goût" = Goût pas détaillé
+- "j'aime la texture et l'odeur" = Texture pas détaillée + Odeur/Arome pas détaillé
 
 FORMAT JSON STRICT :
 {
   "analyse": {
-    "Packaging": "Non",
-    "Apparence": "Non",
-    "Odeur/Arome": "Non",
-    "Goût": "Non",
-    "Morceaux": "Non",
-    "Texture": "Non",
-    "Arrière-goût": "Non",
-    "Qualité": "Non",
-    "Santé": "Non",
-    "Général": "Non"
-  },
-  "relance": ""
+    "Packaging": "",
+    "Apparence": "",
+    "Odeur/Arome": "",
+    "Goût": "",
+    "Morceaux": "",
+    "Texture": "",
+    "Arrière-goût": "",
+    "Qualité": "",
+    "Santé": "",
+    "Général": ""
+  }
 }
 `;
 
   const response = await callMistral([
     {
       role: "system",
-      content: `
-Tu es un expert en codage de réponses ouvertes en études consommateurs.
-Tu dois répondre uniquement avec un JSON valide.
-Aucun texte hors JSON.
-Tu respectes strictement les catégories et les libellés demandés.
-`
+      content: "Réponds uniquement avec un JSON valide. Aucun texte hors JSON."
     },
     {
       role: "user",
@@ -242,34 +227,36 @@ Tu respectes strictement les catégories et les libellés demandés.
   return extractJson(output);
 }
 
-async function repairRelanceWithMistral(texte, analyse) {
-  const themesPasDetailles = getThemesPasDetailles(analyse);
-
-  if (themesPasDetailles.length === 0) {
-    return "Réponse suffisamment détaillée";
-  }
-
+async function buildRelanceWithMistral(texte, themesPasDetailles) {
   const prompt = `
+Tu es un interviewer en test consommateur.
+
 Réponse consommateur :
 "${texte}"
 
-Analyse validée :
-${JSON.stringify(analyse, null, 2)}
+Thèmes à faire préciser :
+${themesPasDetailles.map(theme => "- " + theme).join("\n")}
 
-Thèmes à relancer :
-${themesPasDetailles.map(t => "- " + t).join("\n")}
+TÂCHE :
+Rédige UNE seule question courte pour demander au consommateur de préciser TOUS les thèmes listés.
 
-Rédige UNE seule question courte dans la même langue que la réponse consommateur.
-La question doit relancer uniquement les thèmes listés.
-Maximum 35 mots.
-Réponds uniquement avec la question.
+RÈGLES :
+- La question doit être dans la même langue que la réponse consommateur, quelle que soit cette langue.
+- Ne traduis pas la réponse consommateur.
+- Ne relance que sur les thèmes listés.
+- Ne mentionne pas les thèmes non listés.
+- Ne commence pas par "Q2.bis", "Relance", "Question" ou un préfixe technique.
+- La question doit parler de cette pâtée pour chat / cat food / produit selon la langue de la réponse.
+- Maximum 35 mots.
+
+Réponds uniquement avec le texte de la question, sans JSON.
 `;
 
   const response = await callMistral([
     {
       role: "system",
       content:
-        "Tu rédiges uniquement une question de relance dans la même langue que la réponse consommateur."
+        "Tu rédiges uniquement la question de relance, dans la même langue que la réponse consommateur."
     },
     {
       role: "user",
@@ -290,9 +277,42 @@ Réponds uniquement avec la question.
     .trim();
 }
 
-app.get("/", (req, res) => {
-  res.send("Serveur Mistral opérationnel ✅");
-});
+async function horsSujetRelanceWithMistral(texte) {
+  const prompt = `
+Réponse consommateur :
+"${texte}"
+
+La réponse ne parle pas clairement de la pâtée pour chat.
+
+Rédige une seule question courte dans la même langue que la réponse consommateur pour demander de se concentrer sur la pâtée pour chat et de préciser ce qui a plu dans le produit.
+
+Réponds uniquement avec la question.
+`;
+
+  const response = await callMistral([
+    {
+      role: "system",
+      content:
+        "Tu rédiges uniquement une question courte dans la même langue que la réponse consommateur."
+    },
+    {
+      role: "user",
+      content: prompt
+    }
+  ]);
+
+  let output = response.choices?.[0]?.message?.content || "";
+
+  if (Array.isArray(output)) {
+    output = output.map(x => x.text || "").join("").trim();
+  } else {
+    output = String(output).trim();
+  }
+
+  return cleanText(output)
+    .replace(/^["“”]+|["“”]+$/g, "")
+    .trim();
+}
 
 app.post("/analyseIA", async (req, res) => {
   const texte = cleanText(req.body.texte || "");
@@ -312,27 +332,62 @@ app.post("/analyseIA", async (req, res) => {
       });
     }
 
-    if (!process.env.MISTRAL_API_KEY) {
+    const themesDetectes = detectThemes(texte);
+
+    if (themesDetectes.length === 0) {
+      const relance = process.env.MISTRAL_API_KEY
+        ? await horsSujetRelanceWithMistral(texte)
+        : "Pouvez-vous vous concentrer sur la pâtée pour chat et préciser ce qui vous a plu dans ce produit ?";
+
       return res.json({
         analyse: emptyAnalyse(),
-        relance: "Erreur : clé Mistral manquante."
+        relance
       });
     }
 
-    const jsonOutput = await analyseAndRelanceWithMistral(texte);
+    const analyse = emptyAnalyse();
 
-    const analyse = validateAnalyse(jsonOutput?.analyse);
-    let relance = cleanText(jsonOutput?.relance || "");
+    if (!process.env.MISTRAL_API_KEY) {
+      themesDetectes.forEach(theme => {
+        analyse[theme] = "Oui - Pas détaillé";
+      });
 
-    const themesPasDetailles = getThemesPasDetailles(analyse);
+      return res.json({
+        analyse,
+        relance: "Pouvez-vous préciser ce que vous avez aimé dans les éléments mentionnés de cette pâtée pour chat ?"
+      });
+    }
+
+    const jsonOutput = await analyseDetailsWithMistral(texte, themesDetectes);
+
+    themesDetectes.forEach(theme => {
+      const statut = jsonOutput?.analyse?.[theme];
+
+      if (
+        statut === "Oui - Détaillé" ||
+        statut === "Oui - Pas détaillé"
+      ) {
+        analyse[theme] = statut;
+      } else {
+        analyse[theme] = "Oui - Pas détaillé";
+      }
+    });
+
+    const themesPasDetailles = themesDetectes.filter(
+      theme => analyse[theme] === "Oui - Pas détaillé"
+    );
 
     if (themesPasDetailles.length === 0) {
-      relance = "Réponse suffisamment détaillée";
+      return res.json({
+        analyse,
+        relance: "Réponse suffisamment détaillée"
+      });
     }
 
-    if (themesPasDetailles.length > 0 && !relance) {
-      relance = await repairRelanceWithMistral(texte, analyse);
-    }
+    const relance = await buildRelanceWithMistral(
+      texte,
+      themesPasDetailles
+    );
 
     return res.json({
       analyse,
@@ -340,11 +395,11 @@ app.post("/analyseIA", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Erreur analyseIA :", err);
+    console.error("Erreur Mistral :", err);
 
     return res.json({
       analyse: emptyAnalyse(),
-      relance: "Erreur lors de l'analyse IA."
+      relance: "Réponse suffisamment détaillée"
     });
   }
 });
@@ -354,4 +409,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Serveur prêt sur le port " + PORT);
 });
-```
