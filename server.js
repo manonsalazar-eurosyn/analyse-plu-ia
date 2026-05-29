@@ -15,19 +15,109 @@ app.get("/", (req, res) => {
   res.send("Serveur Mistral opérationnel ✅");
 });
 
+const THEMES = [
+  "Packaging",
+  "Apparence",
+  "Odeur/Arome",
+  "Goût",
+  "Morceaux",
+  "Texture",
+  "Arrière-goût",
+  "Qualité",
+  "Santé",
+  "Général"
+];
+
 function emptyAnalyse() {
-  return {
-    "Packaging": "Non",
-    "Apparence": "Non",
-    "Odeur/Arome": "Non",
-    "Goût": "Non",
-    "Morceaux": "Non",
-    "Texture": "Non",
-    "Arrière-goût": "Non",
-    "Qualité": "Non",
-    "Santé": "Non",
-    "Général": "Non"
-  };
+  return Object.fromEntries(THEMES.map(t => [t, "Non"]));
+}
+
+function cleanText(txt) {
+  return (txt || "")
+    .replace(/\u00A0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalize(txt) {
+  return cleanText(txt)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function detectLanguage(texte) {
+  const t = normalize(texte);
+
+  if (/\b(i like|i liked|taste|smell|texture|cat food|packaging|my cat)\b/.test(t)) {
+    return "en";
+  }
+
+  if (/\b(me gusta|me gusto|sabor|olor|textura|comida para gatos|envase|mi gato)\b/.test(t)) {
+    return "es";
+  }
+
+  return "fr";
+}
+
+function containsAny(t, words) {
+  return words.some(w => t.includes(w));
+}
+
+function detectThemes(texte) {
+  const t = normalize(texte);
+  const themes = [];
+
+  if (containsAny(t, [
+    "packaging", "pack", "emballage", "paquet", "sachet", "boite", "barquette",
+    "ouvrir", "fermer", "ouverture", "format", "envase", "paquete"
+  ])) themes.push("Packaging");
+
+  if (containsAny(t, [
+    "apparence", "aspect", "visuel", "couleur", "joli", "belle couleur",
+    "appearance", "look", "color", "colour", "aspecto", "color"
+  ])) themes.push("Apparence");
+
+  if (containsAny(t, [
+    "odeur", "arome", "parfum", "sent", "odor", "odour", "smell", "aroma",
+    "olor", "aroma"
+  ])) themes.push("Odeur/Arome");
+
+  if (containsAny(t, [
+    "gout", "saveur", "appetence", "taste", "flavour", "flavor", "sabor"
+  ])) themes.push("Goût");
+
+  if (containsAny(t, [
+    "morceau", "morceaux", "bout", "pieces", "chunks", "trozos", "pedazos"
+  ])) themes.push("Morceaux");
+
+  if (containsAny(t, [
+    "texture", "consistance", "cremeuse", "crémeuse", "onctueuse", "lisse",
+    "humide", "seche", "sèche", "ferme", "moelleuse", "creamy", "smooth",
+    "moist", "dry", "soft", "textura", "cremosa", "suave", "humeda", "húmeda"
+  ])) themes.push("Texture");
+
+  if (containsAny(t, [
+    "arriere-gout", "arriere gout", "aftertaste", "regusto"
+  ])) themes.push("Arrière-goût");
+
+  if (containsAny(t, [
+    "qualite", "qualitatif", "premium", "ingredient", "rassurant",
+    "quality", "ingredients", "calidad", "ingredientes"
+  ])) themes.push("Qualité");
+
+  if (containsAny(t, [
+    "sante", "digestion", "digere", "pelage", "mon chat", "chat a aime",
+    "chat a tout mange", "gamelle", "leche", "health", "digestion", "my cat",
+    "bowl", "ate everything", "salud", "mi gato", "digestion", "comio todo"
+  ])) themes.push("Santé");
+
+  if (containsAny(t, [
+    "produit", "global", "general", "bien", "bon produit", "original",
+    "product", "overall", "producto", "general"
+  ])) themes.push("Général");
+
+  return [...new Set(themes)];
 }
 
 function extractJson(text) {
@@ -45,27 +135,10 @@ function extractJson(text) {
   }
 }
 
-function isValidResponse(obj) {
+function isValidPartial(obj) {
   if (!obj || typeof obj !== "object") return false;
   if (!obj.analyse || typeof obj.analyse !== "object") return false;
-  if (typeof obj.relance !== "string") return false;
-
-  const expectedThemes = [
-    "Packaging",
-    "Apparence",
-    "Odeur/Arome",
-    "Goût",
-    "Morceaux",
-    "Texture",
-    "Arrière-goût",
-    "Qualité",
-    "Santé",
-    "Général"
-  ];
-
-  return expectedThemes.every(
-    theme => typeof obj.analyse[theme] === "string"
-  );
+  return true;
 }
 
 async function callMistral(messages, retries = 2) {
@@ -87,177 +160,131 @@ async function callMistral(messages, retries = 2) {
   }
 }
 
-app.post("/analyseIA", async (req, res) => {
-  const texte = (req.body.texte || "").trim();
-
-  try {
-    if (!process.env.MISTRAL_API_KEY) {
-      return res.json({
-        analyse: emptyAnalyse(),
-        relance: "Réponse suffisamment détaillée"
-      });
+function themeLabel(theme, lang) {
+  const labels = {
+    fr: {
+      "Packaging": "le packaging",
+      "Apparence": "l'apparence",
+      "Odeur/Arome": "l'odeur",
+      "Goût": "le goût",
+      "Morceaux": "les morceaux",
+      "Texture": "la texture",
+      "Arrière-goût": "l'arrière-goût",
+      "Qualité": "la qualité",
+      "Santé": "la réaction ou le bien-être de votre chat",
+      "Général": "votre impression générale"
+    },
+    en: {
+      "Packaging": "the packaging",
+      "Apparence": "the appearance",
+      "Odeur/Arome": "the smell",
+      "Goût": "the taste",
+      "Morceaux": "the pieces",
+      "Texture": "the texture",
+      "Arrière-goût": "the aftertaste",
+      "Qualité": "the quality",
+      "Santé": "your cat's reaction or wellbeing",
+      "Général": "your overall impression"
+    },
+    es: {
+      "Packaging": "el envase",
+      "Apparence": "el aspecto",
+      "Odeur/Arome": "el olor",
+      "Goût": "el sabor",
+      "Morceaux": "los trozos",
+      "Texture": "la textura",
+      "Arrière-goût": "el regusto",
+      "Qualité": "la calidad",
+      "Santé": "la reacción o el bienestar de su gato",
+      "Général": "su impresión general"
     }
+  };
 
-    const prompt = `
+  return labels[lang]?.[theme] || theme;
+}
+
+function joinLabels(labels, lang) {
+  if (labels.length === 1) return labels[0];
+
+  const sep = lang === "en" ? " and " : lang === "es" ? " y " : " et ";
+
+  return labels.slice(0, -1).join(", ") + sep + labels[labels.length - 1];
+}
+
+function buildRelance(themesPasDetailles, lang) {
+  const labels = themesPasDetailles.map(theme => themeLabel(theme, lang));
+  const joined = joinLabels(labels, lang);
+
+  if (lang === "en") {
+    return `Could you specify what you liked about ${joined} of this cat food?`;
+  }
+
+  if (lang === "es") {
+    return `¿Puede precisar qué le gustó de ${joined} de esta comida para gatos?`;
+  }
+
+  return `Pouvez-vous préciser ce que vous avez aimé dans ${joined} de cette pâtée pour chat ?`;
+}
+
+function horsSujetRelance(lang) {
+  if (lang === "en") {
+    return "Could you focus on the cat food and specify what you liked about this product?";
+  }
+
+  if (lang === "es") {
+    return "¿Puede centrarse en la comida para gatos y precisar qué le gustó de este producto?";
+  }
+
+  return "Pouvez-vous vous concentrer sur la pâtée pour chat et préciser ce qui vous a plu dans ce produit ?";
+}
+
+function isNoRelanceAnswer(texte) {
+  const t = normalize(texte);
+
+  return [
+    "rien",
+    "ras",
+    "je ne sais pas",
+    "rien ne m a plu",
+    "aucun",
+    "nothing",
+    "no",
+    "nada",
+    "no se"
+  ].some(x => t === x || t.includes(x));
+}
+
+async function analyseDetailsWithMistral(texte, themesDetectes) {
+  const prompt = `
 Tu analyses une réponse ouverte à propos d'une pâtée pour chat.
 
-QUESTION :
-Qu'avez-vous aimé dans cette pâtée pour chat ?
-
-RÉPONSE À ANALYSER :
+Réponse consommateur :
 "${texte}"
 
-OBJECTIF :
-Tu dois identifier les thèmes mentionnés, dire s'ils sont détaillés ou non, puis faire une relance uniquement si nécessaire.
+Thèmes détectés automatiquement dans la réponse :
+${themesDetectes.map(t => "- " + t).join("\n")}
 
-RÈGLE DE LANGUE :
-- Détecte la langue de la réponse.
-- Si une relance est nécessaire, elle doit être dans la même langue que la réponse.
-- Si la réponse est en français, relance en français.
-- Si la réponse est en anglais, relance en anglais.
-- Si la réponse est en espagnol, relance en espagnol.
-
-THÈMES POSSIBLES :
-- Packaging
-- Apparence
-- Odeur/Arome
-- Goût
-- Morceaux
-- Texture
-- Arrière-goût
-- Qualité
-- Santé
-- Général
-
-STATUTS POSSIBLES :
+TÂCHE :
+Pour chacun des thèmes détectés automatiquement, dis seulement s'il est :
 - "Oui - Détaillé"
 - "Oui - Pas détaillé"
-- "Non"
 
-RÈGLE PRINCIPALE :
-Un thème est "Oui - Détaillé" dès qu'il est accompagné d'un adjectif, d'une précision ou d'une caractéristique pertinente.
-
-La longueur de la réponse ne compte pas.
-Une réponse courte peut être suffisante.
+IMPORTANT :
+- Il est interdit de mettre "Non" pour un thème de la liste détectée.
+- Un thème est "Oui - Détaillé" s'il est accompagné d'un adjectif, d'une précision ou d'une caractéristique pertinente.
+- Un thème est "Oui - Pas détaillé" s'il est seulement cité sans précision.
+- Ne rédige pas la relance. La relance sera générée par le serveur.
 
 Exemples :
 - "texture crémeuse" = Texture détaillée
 - "texture onctueuse" = Texture détaillée
 - "texture pas trop humide" = Texture détaillée
 - "goût pas trop intense" = Goût détaillé
-- "goût naturel" = Goût détaillé
-- "odeur légère" = Odeur/Arome détaillé
-- "morceaux tendres" = Morceaux détaillé
-- "pack pratique" = Packaging détaillé
-- "mon chat était en meilleure santé" = Santé détaillé
-- "mon chat a tout mangé" = Santé détaillé
-
-À l'inverse, un thème est "Oui - Pas détaillé" s'il est seulement cité sans adjectif, sans précision ou sans caractéristique.
-
-Exemples :
-- "j'aime le goût" = Goût pas détaillé
+- "odeur naturelle" = Odeur/Arome détaillé
 - "j'aime la texture" = Texture pas détaillée
 - "j'aime l'odeur" = Odeur/Arome pas détaillé
-- "j'aime les morceaux" = Morceaux pas détaillé
-- "mon chat a aimé" = Santé pas détaillé
-- "bonne qualité" = Qualité pas détaillée
-- "bon produit" = Général pas détaillé
-
-RÈGLE DE RELANCE :
-- Si aucun thème n'est "Oui - Pas détaillé", la relance doit être exactement :
-"Réponse suffisamment détaillée"
-
-- Si un ou plusieurs thèmes sont "Oui - Pas détaillé", fais UNE SEULE relance.
-- Cette relance doit demander de préciser TOUS les thèmes ayant pour statut "Oui - Pas détaillé".
-- Ne relance jamais sur un thème déjà détaillé.
-
-
-EXEMPLES DE COMPORTEMENT :
-
-Réponse :
-"J'ai aimé le goût et la texture."
-
-Analyse :
-- Goût = "Oui - Pas détaillé"
-- Texture = "Oui - Pas détaillé"
-
-Relance :
-"Pouvez-vous préciser ce que vous avez aimé dans le goût et la texture de cette pâtée pour chat ?"
-
-Réponse :
-"J'ai aimé le goût et la texture onctueuse et crémeuse."
-
-Analyse :
-- Goût = "Oui - Pas détaillé"
-- Texture = "Oui - Détaillé"
-
-Relance :
-"Pouvez-vous préciser ce que vous avez aimé dans le goût de cette pâtée pour chat ?"
-
-Réponse :
-"J'aime le packaging, l'odeur et l'apparence."
-
-Analyse :
-- Packaging = "Oui - Pas détaillé"
-- Odeur = "Oui - Pas détaillé"
-- Apparence = "Oui - Pas détaillé"
-
-Relance :
-"Pouvez-vous préciser ce que vous avez aimé dans le packaging, l'odeur et l'apparence de cette pâtée pour chat ?"
-
-Réponse :
-"J'ai aimé le goût pas trop intense, et aussi la texture et mon chat était en meilleure santé."
-
-Analyse :
-- Goût = "Oui - Détaillé"
-- Texture = "Oui - Pas détaillé"
-- Santé = "Oui - Détaillé"
-
-Relance :
-"Pouvez-vous préciser ce que vous avez aimé dans la texture de cette pâtée pour chat ?"
-
-Réponse :
-"I liked the creamy but not too wet texture, as well as the smell and the taste."
-
-Analyse :
-- Texture = "Oui - Détaillé"
-- Odeur/Arome = "Oui - Pas détaillé"
-- Goût = "Oui - Pas détaillé"
-
-Relance :
-"Could you specify what you liked about the smell and taste of this cat food?"
-
-Réponse :
-"Me gustó la textura cremosa pero no demasiado húmeda, así como el olor y el sabor."
-
-Analyse :
-- Texture = "Oui - Détaillé"
-- Odeur/Arome = "Oui - Pas détaillé"
-- Goût = "Oui - Pas détaillé"
-
-Relance :
-"¿Puede precisar qué le gustó del olor y del sabor de esta comida para gatos?"
-
-RÈGLE HORS SUJET :
-Si la réponse ne parle pas du produit, de la pâtée pour chat, du chat ou d'une caractéristique du produit :
-- tous les thèmes = "Non"
-- relance dans la même langue
-- demander de se concentrer sur la pâtée pour chat et de préciser ce qui a plu dans le produit.
-
-RÈGLE PAS DE RELANCE :
-Si le répondant dit qu'il n'a rien aimé ou ne sait pas :
-- rien
-- RAS
-- je ne sais pas
-- rien ne m'a plu
-- aucun
-- nothing
-- no
-- nada
-- no sé
-
-Alors :
-relance = "Réponse suffisamment détaillée"
+- "j'aime le goût" = Goût pas détaillé
+- "j'aime la texture et l'odeur" = Texture pas détaillée + Odeur/Arome pas détaillé
 
 FORMAT JSON STRICT :
 {
@@ -272,41 +299,103 @@ FORMAT JSON STRICT :
     "Qualité": "",
     "Santé": "",
     "Général": ""
-  },
-  "relance": ""
+  }
 }
 `;
 
-    const response = await callMistral([
-      {
-        role: "system",
-        content:
-          "Réponds uniquement avec un JSON valide. Aucun texte hors JSON. La relance doit être dans la même langue que la réponse analysée."
-      },
-      {
-        role: "user",
-        content: prompt
-      }
-    ]);
+  const response = await callMistral([
+    {
+      role: "system",
+      content:
+        "Réponds uniquement avec un JSON valide. Aucun texte hors JSON."
+    },
+    {
+      role: "user",
+      content: prompt
+    }
+  ]);
 
-    let output = response.choices?.[0]?.message?.content || "";
+  let output = response.choices?.[0]?.message?.content || "";
 
-    if (Array.isArray(output)) {
-      output = output.map(x => x.text || "").join("").trim();
-    } else {
-      output = String(output).trim();
+  if (Array.isArray(output)) {
+    output = output.map(x => x.text || "").join("").trim();
+  } else {
+    output = String(output).trim();
+  }
+
+  return extractJson(output);
+}
+
+app.post("/analyseIA", async (req, res) => {
+  const texte = cleanText(req.body.texte || "");
+  const lang = detectLanguage(texte);
+
+  try {
+    if (!texte) {
+      return res.json({
+        analyse: emptyAnalyse(),
+        relance: horsSujetRelance(lang)
+      });
     }
 
-    const jsonOutput = extractJson(output);
-
-    if (!jsonOutput || !isValidResponse(jsonOutput)) {
+    if (isNoRelanceAnswer(texte)) {
       return res.json({
         analyse: emptyAnalyse(),
         relance: "Réponse suffisamment détaillée"
       });
     }
 
-    return res.json(jsonOutput);
+    const themesDetectes = detectThemes(texte);
+
+    if (themesDetectes.length === 0) {
+      return res.json({
+        analyse: emptyAnalyse(),
+        relance: horsSujetRelance(lang)
+      });
+    }
+
+    if (!process.env.MISTRAL_API_KEY) {
+      const analyse = emptyAnalyse();
+      themesDetectes.forEach(theme => {
+        analyse[theme] = "Oui - Pas détaillé";
+      });
+
+      return res.json({
+        analyse,
+        relance: buildRelance(themesDetectes, lang)
+      });
+    }
+
+    const jsonOutput = await analyseDetailsWithMistral(texte, themesDetectes);
+
+    const analyse = emptyAnalyse();
+
+    themesDetectes.forEach(theme => {
+      const statut = jsonOutput?.analyse?.[theme];
+
+      if (
+        statut === "Oui - Détaillé" ||
+        statut === "Oui - Pas détaillé"
+      ) {
+        analyse[theme] = statut;
+      } else {
+        analyse[theme] = "Oui - Pas détaillé";
+      }
+    });
+
+    const themesPasDetailles = themesDetectes.filter(
+      theme => analyse[theme] === "Oui - Pas détaillé"
+    );
+
+    const relance =
+      themesPasDetailles.length > 0
+        ? buildRelance(themesPasDetailles, lang)
+        : "Réponse suffisamment détaillée";
+
+    return res.json({
+      analyse,
+      relance
+    });
 
   } catch (err) {
     console.error("Erreur Mistral :", err);
