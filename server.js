@@ -107,6 +107,174 @@ function detectThemes(texte) {
   return [...new Set(themes)];
 }
 
+function hasSpecificDetailForTheme(theme, texte) {
+  const t = normalize(texte);
+
+  const details = {
+    "Packaging": [
+      "facile a ouvrir",
+      "facile a fermer",
+      "pratique",
+      "refermable",
+      "bonne taille",
+      "format adapte",
+      "format pratique",
+      "lisible",
+      "easy to open",
+      "easy to close",
+      "practical",
+      "convenient",
+      "resealable",
+      "envase practico",
+      "facil de abrir"
+    ],
+
+    "Apparence": [
+      "belle couleur",
+      "couleur",
+      "aspect naturel",
+      "naturelle",
+      "homogene",
+      "appetissante",
+      "pas seche",
+      "pas trop humide",
+      "nice color",
+      "natural look",
+      "homogeneous",
+      "appetizing",
+      "color natural",
+      "aspecto natural"
+    ],
+
+    "Odeur/Arome": [
+      "odeur naturelle",
+      "odeur legere",
+      "odeur appetissante",
+      "pas trop forte",
+      "fraiche",
+      "sent bon sans etre forte",
+      "natural smell",
+      "light smell",
+      "appetizing smell",
+      "fresh smell",
+      "olor natural",
+      "olor ligero",
+      "olor apetitoso"
+    ],
+
+    "Goût": [
+      "gout naturel",
+      "gout pas trop intense",
+      "pas trop intense",
+      "gout equilibre",
+      "equilibre",
+      "savoureux",
+      "prononce",
+      "natural taste",
+      "balanced taste",
+      "not too strong",
+      "tasty",
+      "sabor natural",
+      "sabor equilibrado"
+    ],
+
+    "Morceaux": [
+      "quantite de morceaux",
+      "bonne quantite",
+      "beaucoup de morceaux",
+      "taille des morceaux",
+      "gros morceaux",
+      "petits morceaux",
+      "morceaux tendres",
+      "morceaux moelleux",
+      "taille adaptee",
+      "pieces size",
+      "good amount of pieces",
+      "tender pieces",
+      "trozos tiernos",
+      "cantidad de trozos"
+    ],
+
+    "Texture": [
+      "texture cremeuse",
+      "cremeuse",
+      "texture onctueuse",
+      "onctueuse",
+      "texture lisse",
+      "lisse",
+      "pas trop humide",
+      "humide",
+      "pas seche",
+      "seche",
+      "ferme",
+      "moelleuse",
+      "creamy texture",
+      "creamy",
+      "smooth texture",
+      "smooth",
+      "moist",
+      "not too wet",
+      "soft texture",
+      "textura cremosa",
+      "cremosa",
+      "textura suave",
+      "suave"
+    ],
+
+    "Arrière-goût": [
+      "arriere gout leger",
+      "arriere-gout leger",
+      "ne reste pas longtemps",
+      "pas desagreable",
+      "light aftertaste",
+      "pleasant aftertaste",
+      "regusto ligero"
+    ],
+
+    "Qualité": [
+      "bonne qualite",
+      "ingredients de qualite",
+      "premium",
+      "rassurant",
+      "composition rassurante",
+      "quality ingredients",
+      "good quality",
+      "calidad buena",
+      "ingredientes de calidad"
+    ],
+
+    "Santé": [
+      "meilleure sante",
+      "meilleure digestion",
+      "bonne digestion",
+      "mon chat a tout mange",
+      "chat a tout mange",
+      "il a tout mange",
+      "leche la gamelle",
+      "il en redemandait",
+      "pelage",
+      "better health",
+      "better digestion",
+      "ate everything",
+      "licked the bowl",
+      "mi gato comio todo",
+      "mejor digestion"
+    ],
+
+    "Général": [
+      "produit original",
+      "bonne impression",
+      "produit rassurant",
+      "produit frais",
+      "original product",
+      "good overall impression",
+      "producto original"
+    ]
+  };
+
+  return (details[theme] || []).some(word => t.includes(word));
+}
+
 function extractJson(text) {
   try {
     return JSON.parse(text);
@@ -175,15 +343,12 @@ Pour chacun des thèmes détectés automatiquement, dis seulement s'il est :
 RÈGLES PRIORITAIRES :
 - Il est interdit de mettre "Non" pour un thème détecté automatiquement.
 - Un thème n'est PAS détaillé simplement parce qu'il est mentionné.
-- Pour être "Oui - Détaillé", le répondant doit décrire une caractéristique du thème lui-même.
+- Pour être "Oui - Détaillé", le répondant doit décrire une caractéristique concrète du thème lui-même.
 - Pour être "Oui - Pas détaillé", le répondant mentionne simplement le thème ou exprime son appréciation sans le caractériser.
 - Ne rédige pas la relance.
 
-
 RÈGLE ABSOLUE :
-
 Les mots suivants ne constituent PAS un détail :
-
 - bien
 - beaucoup
 - vraiment
@@ -196,140 +361,75 @@ Les mots suivants ne constituent PAS un détail :
 - aimé
 
 Ces mots expriment uniquement l'intensité de l'appréciation.
+Ils ne décrivent pas le thème.
 
 Exemples :
-
-- "j'ai bien aimé la texture"
-  => Texture = Oui - Pas détaillé
-
-- "j'ai beaucoup aimé le goût"
-  => Goût = Oui - Pas détaillé
-
-- "j'ai vraiment aimé le packaging"
-  => Packaging = Oui - Pas détaillé
-
-- "j'ai adoré les morceaux"
-  => Morceaux = Oui - Pas détaillé
-
-Pour être détaillé, la précision doit décrire le thème lui-même.
+- "j'ai bien aimé la texture" = Texture "Oui - Pas détaillé"
+- "j'ai aimé la texture" = Texture "Oui - Pas détaillé"
+- "j'ai beaucoup aimé le goût" = Goût "Oui - Pas détaillé"
+- "j'ai vraiment aimé le packaging" = Packaging "Oui - Pas détaillé"
+- "j'ai adoré les morceaux" = Morceaux "Oui - Pas détaillé"
 
 EXEMPLES OBLIGATOIRES :
 
-TEXTURE
+TEXTURE :
+- "j'aime la texture" = Texture "Oui - Pas détaillé"
+- "j'ai bien aimé la texture" = Texture "Oui - Pas détaillé"
+- "la texture" = Texture "Oui - Pas détaillé"
+- "texture crémeuse" = Texture "Oui - Détaillé"
+- "texture onctueuse" = Texture "Oui - Détaillé"
+- "texture pas trop humide" = Texture "Oui - Détaillé"
+- "texture ferme" = Texture "Oui - Détaillé"
 
-- "j'aime la texture"
-  => Oui - Pas détaillé
+APPARENCE :
+- "j'aime l'apparence" = Apparence "Oui - Pas détaillé"
+- "l'apparence" = Apparence "Oui - Pas détaillé"
+- "belle couleur" = Apparence "Oui - Détaillé"
+- "aspect naturel" = Apparence "Oui - Détaillé"
+- "aspect appétissant" = Apparence "Oui - Détaillé"
 
-- "j'ai bien aimé la texture"
-  => Oui - Pas détaillé
+ODEUR / AROME :
+- "j'aime l'odeur" = Odeur/Arome "Oui - Pas détaillé"
+- "l'odeur" = Odeur/Arome "Oui - Pas détaillé"
+- "odeur naturelle" = Odeur/Arome "Oui - Détaillé"
+- "odeur légère" = Odeur/Arome "Oui - Détaillé"
+- "odeur appétissante" = Odeur/Arome "Oui - Détaillé"
 
-- "texture crémeuse"
-  => Oui - Détaillé
+GOÛT :
+- "j'aime le goût" = Goût "Oui - Pas détaillé"
+- "le goût" = Goût "Oui - Pas détaillé"
+- "goût pas trop intense" = Goût "Oui - Détaillé"
+- "goût naturel" = Goût "Oui - Détaillé"
+- "goût prononcé" = Goût "Oui - Détaillé"
 
-- "texture onctueuse"
-  => Oui - Détaillé
+PACKAGING :
+- "j'aime le packaging" = Packaging "Oui - Pas détaillé"
+- "le packaging" = Packaging "Oui - Pas détaillé"
+- "packaging facile à ouvrir" = Packaging "Oui - Détaillé"
+- "facile à ouvrir" = Packaging "Oui - Détaillé"
+- "packaging pratique" = Packaging "Oui - Détaillé"
+- "format adapté" = Packaging "Oui - Détaillé"
 
-- "texture pas trop humide"
-  => Oui - Détaillé
+MORCEAUX :
+- "j'aime les morceaux" = Morceaux "Oui - Pas détaillé"
+- "les morceaux" = Morceaux "Oui - Pas détaillé"
+- "quantité de morceaux" = Morceaux "Oui - Pas détaillé"
+- "quantité de morceaux pas mal" = Morceaux "Oui - Détaillé"
+- "bonne quantité de morceaux" = Morceaux "Oui - Détaillé"
+- "beaucoup de morceaux" = Morceaux "Oui - Détaillé"
+- "morceaux tendres" = Morceaux "Oui - Détaillé"
+- "taille des morceaux adaptée" = Morceaux "Oui - Détaillé"
 
-- "texture ferme"
-  => Oui - Détaillé
+QUALITÉ :
+- "qualité" = Qualité "Oui - Pas détaillé"
+- "bonne qualité" = Qualité "Oui - Détaillé"
+- "ingrédients de qualité" = Qualité "Oui - Détaillé"
 
-ODEUR / AROME
-
-- "j'aime l'odeur"
-  => Oui - Pas détaillé
-
-- "odeur naturelle"
-  => Oui - Détaillé
-
-- "odeur légère"
-  => Oui - Détaillé
-
-- "odeur appétissante"
-  => Oui - Détaillé
-
-GOÛT
-
-- "j'aime le goût"
-  => Oui - Pas détaillé
-
-- "goût pas trop intense"
-  => Oui - Détaillé
-
-- "goût naturel"
-  => Oui - Détaillé
-
-- "goût prononcé"
-  => Oui - Détaillé
-
-PACKAGING
-
-- "j'aime le packaging"
-  => Oui - Pas détaillé
-
-- "j'ai bien aimé le packaging"
-  => Oui - Pas détaillé
-
-- "packaging facile à ouvrir"
-  => Oui - Détaillé
-
-- "facile à ouvrir"
-  => Oui - Détaillé
-
-- "packaging pratique"
-  => Oui - Détaillé
-
-- "format adapté"
-  => Oui - Détaillé
-
-MORCEAUX
-
-- "j'aime les morceaux"
-  => Oui - Pas détaillé
-
-- "j'ai bien aimé les morceaux"
-  => Oui - Pas détaillé
-
-- "quantité de morceaux pas mal"
-  => Oui - Détaillé
-
-- "bonne quantité de morceaux"
-  => Oui - Détaillé
-
-- "beaucoup de morceaux"
-  => Oui - Détaillé
-
-- "morceaux tendres"
-  => Oui - Détaillé
-
-- "taille des morceaux adaptée"
-  => Oui - Détaillé
-
-QUALITÉ
-
-- "qualité"
-  => Oui - Pas détaillé
-
-- "bonne qualité"
-  => Oui - Détaillé
-
-- "ingrédients de qualité"
-  => Oui - Détaillé
-
-SANTÉ
-
-- "mon chat a aimé"
-  => Oui - Pas détaillé
-
-- "mon chat a tout mangé"
-  => Oui - Détaillé
-
-- "mon chat semblait en meilleure santé"
-  => Oui - Détaillé
-
-- "meilleure digestion"
-  => Oui - Détaillé
+SANTÉ :
+- "mon chat a aimé" = Santé "Oui - Pas détaillé"
+- "mon chat a tout mangé" = Santé "Oui - Détaillé"
+- "mon chat semblait en meilleure santé" = Santé "Oui - Détaillé"
+- "meilleure digestion" = Santé "Oui - Détaillé"
 
 FORMAT JSON STRICT :
 {
@@ -381,16 +481,21 @@ Thèmes à faire préciser :
 ${themesPasDetailles.map(theme => "- " + theme).join("\n")}
 
 TÂCHE :
-Rédige UNE seule question courte pour demander au consommateur de préciser TOUS les thèmes listés.
+Rédige UNE seule question courte et neutre pour demander au consommateur de préciser ce qu'il a aimé dans TOUS les thèmes listés.
 
 RÈGLES :
 - La question doit être dans la même langue que la réponse consommateur, quelle que soit cette langue.
 - Ne traduis pas la réponse consommateur.
 - Ne relance que sur les thèmes listés.
 - Ne mentionne pas les thèmes non listés.
+- Utilise une formulation simple et neutre.
+- Évite "particulièrement apprécié".
 - Ne commence pas par "Q2.bis", "Relance", "Question" ou un préfixe technique.
 - La question doit parler de cette pâtée pour chat / cat food / produit selon la langue de la réponse.
 - Maximum 35 mots.
+
+En français, utilise de préférence :
+"Pouvez-vous préciser ce que vous avez aimé dans..."
 
 Réponds uniquement avec le texte de la question, sans JSON.
 `;
@@ -507,10 +612,10 @@ app.post("/analyseIA", async (req, res) => {
       const statut = jsonOutput?.analyse?.[theme];
 
       if (
-        statut === "Oui - Détaillé" ||
-        statut === "Oui - Pas détaillé"
+        statut === "Oui - Détaillé" &&
+        hasSpecificDetailForTheme(theme, texte)
       ) {
-        analyse[theme] = statut;
+        analyse[theme] = "Oui - Détaillé";
       } else {
         analyse[theme] = "Oui - Pas détaillé";
       }
